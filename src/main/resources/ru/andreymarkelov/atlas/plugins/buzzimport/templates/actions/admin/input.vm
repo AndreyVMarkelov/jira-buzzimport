@@ -1,1 +1,45 @@
-<h1>input.vm</h1>
+<html>
+    <head>
+        <title>$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.title")</title>
+        <meta name="decorator" content="admin"/>
+        <meta content="admin_plugins_menu/buzzimport-admin-section" name="admin.active.section">
+        <meta content="buzzimport-admin-action" name="admin.active.tab">
+        $webResourceManager.requireResource("jira.webresources:global-static")
+        $webResourceManager.requireResource("jira.webresources:jira-global")
+        $webResourceManager.requireResource("com.atlassian.auiplugin:ajs")
+        $webResourceManager.requireResourcesForContext("buzzimport")
+    </head>
+    <body class="aui">
+        #if($action.hasAnyErrors())
+        <div class="aui-message error">
+            <span class="aui-icon icon-error"></span>
+            #foreach($error in $action.getErrorMessages())
+                <p><strong>$error</strong></p>
+            #end
+        </div>
+        #end
+        <p class="title">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.desc")</p>
+        <form class="aui" action="BuzzImportUploadAdminAction.jspa" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="atl_token" value="$atl_token"/>
+            <fieldset>
+                <div class="field-group">
+                    <label for="mapping">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.filemapping")</label>
+                    <textarea class="textarea" name="mapping" id="mapping"></textarea>
+                    <div class="description">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.filemapping.desc")</div>
+                </div>
+            </fieldset>
+            <fieldset>
+                <div class="field-group">
+                    <label for="uploadFile">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.uploadfile")</label>
+                    <input class="upfile" type="file" id="uploadFile" name="uploadFile" title="upload file">
+                    <div class="description">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.uploadfile.desc")</div>
+                </div>
+            </fieldset>
+            <div class="buttons-container">
+                <div class="buttons">
+                    <input class="button submit" type="submit" name="import" value="$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.action.import")"/>
+                </div>
+            </div>
+        </form>
+    </body>
+</html>

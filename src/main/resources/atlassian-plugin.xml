@@ -6,6 +6,7 @@
         <vendor name="${project.organization.name}" url="${project.organization.url}"/>
         <param name="plugin-icon">/ru/andreymarkelov/atlas/plugins/buzzimport/images/pluginIcon.png</param>
         <param name="plugin-logo">/ru/andreymarkelov/atlas/plugins/buzzimport/images/pluginLogo.png</param>
+        <param name="configure.url">/secure/BuzzImportAdminAction.jspa</param>
     </plugin-info>
 
     <!-- I18n -->
@@ -19,12 +20,6 @@
         <resource type="download" name="images/" location="/ru/andreymarkelov/atlas/plugins/buzzimport/images"/>
         <context>buzzimport</context>
     </web-resource>
-
-    <!-- Servlets -->
-    <servlet key="buzzimport-upload-servlet" name="dwe" i18n-name-key="dwe.name" class="ru.andreymarkelov.atlas.plugins.buzzimport.servlet.BuzzImportUpload">
-        <description key="dwe.description">The dwe Plugin</description>
-        <url-pattern>/buzzimport/upload</url-pattern>
-    </servlet>
 
     <!-- Web Items -->
     <web-section key="buzzimport-admin-section" name="Buzz Import Section" location="admin_plugins_menu">
@@ -40,17 +35,19 @@
         <condition class="com.atlassian.jira.plugin.webfragment.conditions.JiraGlobalPermissionCondition">
             <param name="permission">admin</param>
         </condition>
-        <link linkId="buzzimport-admin-action">/secure/BuzzImportAdminAction!default.jspa</link>
+        <link linkId="buzzimport-admin-action">/secure/BuzzImportAdminAction.jspa</link>
     </web-item>
 
     <!-- Web Actions -->
-    <webwork1 key="buzzimport-actions" name="Buzz Import Web Actions" i18n-name-key="dw.name">
-        <description key="dw.description">The dw Plugin</description>
+    <webwork1 key="buzzimport-actions" name="Buzz Import Web Actions" class="java.lang.Object">
         <actions>
             <action name="ru.andreymarkelov.atlas.plugins.buzzimport.webwork.BuzzImportAdminAction" alias="BuzzImportAdminAction">
-                <view name="success">/ru/andreymarkelov/atlas/plugins/buzzimport/templates/actions/admin/success.vm</view>
                 <view name="input">/ru/andreymarkelov/atlas/plugins/buzzimport/templates/actions/admin/input.vm</view>
-                <view name="error">/ru/andreymarkelov/atlas/plugins/buzzimport/templates/actions/admin/error.vm</view>
+                <view name="permissionviolation">/secure/views/permissionviolation.jsp</view>
+            </action>
+            <action name="ru.andreymarkelov.atlas.plugins.buzzimport.webwork.BuzzImportUploadAdminAction" alias="BuzzImportUploadAdminAction">
+                <view name="success">/ru/andreymarkelov/atlas/plugins/buzzimport/templates/actions/admin/success.vm</view>
+                <view name="permissionviolation">/secure/views/permissionviolation.jsp</view>
             </action>
         </actions>
     </webwork1>
