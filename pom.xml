@@ -1,19 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>ru.andreymarkelov.atlas.plugins</groupId>
     <artifactId>buzzimport</artifactId>
     <version>1.0.0</version>
     <packaging>atlassian-plugin</packaging>
-
     <organization>
         <name>Andrey Markelov</name>
         <url>http://ru.linkedin.com/in/andreymarkelov/</url>
     </organization>
-
     <name>buzzimport</name>
     <description>This is the ru.andreymarkelov.atlas.plugins:buzzimport plugin for Atlassian JIRA.</description>
-
     <dependencies>
         <dependency>
             <groupId>com.atlassian.jira</groupId>
@@ -56,8 +54,23 @@
             <version>1.6.6</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>3.12</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>3.12</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>stax</groupId>
+                    <artifactId>stax-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
     </dependencies>
-
     <build>
         <plugins>
             <plugin>
@@ -85,10 +98,9 @@
             </plugin>
         </plugins>
     </build>
-
     <properties>
         <jira.version>7.5.0</jira.version>
-        <amps.version>6.3.6</amps.version>
+        <amps.version>6.3.15</amps.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <useFastdevCli>false</useFastdevCli>
     </properties>

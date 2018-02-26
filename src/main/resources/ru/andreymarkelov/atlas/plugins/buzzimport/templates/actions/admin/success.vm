@@ -1,1 +1,39 @@
-<h1>success.vm</h1>
+<html>
+<head>
+    <title>$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.success.title")</title>
+    <meta name="decorator" content="admin"/>
+    <meta content="admin_plugins_menu/buzzimport-admin-section" name="admin.active.section">
+    <meta content="buzzimport-admin-action" name="admin.active.tab">
+    $webResourceManager.requireResource("jira.webresources:global-static")
+    $webResourceManager.requireResource("jira.webresources:jira-global")
+    $webResourceManager.requireResource("com.atlassian.auiplugin:ajs")
+    $webResourceManager.requireResourcesForContext("buzzimport")
+</head>
+<body class="aui">
+    <h2 class="title">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.success.desc")</h2>
+    <a href="BuzzImportUploadAdminAction!default.jspa">&lt;&lt;&lt; $action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.success.back")</a>
+    #if($!action.getFatalError() != "")
+    <div class="aui-message error">
+        <span class="aui-icon icon-error"></span>
+        <p><strong>$!action.getFatalError()</strong></p>
+    </div>
+    #else
+    <p class="title">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.success.table")</p>
+    <table width="100%" class="aui">
+        <thead>
+        <tr>
+            <th width="10%">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.success.table.num")</th>
+            <th width="90%">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.success.table.status")</th>
+        </tr>
+        </thead>
+        <tbody>
+            #foreach($resultItem in $action.getResultItems())
+            <tr>
+                <td width="10%">$resultItem.rowNum</td>
+                <td width="90%">$resultItem.status</td>
+            </tr>
+            #end
+    </table>
+    #end
+</body>
+</html>

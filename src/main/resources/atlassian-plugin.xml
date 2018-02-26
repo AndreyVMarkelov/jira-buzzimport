@@ -6,7 +6,7 @@
         <vendor name="${project.organization.name}" url="${project.organization.url}"/>
         <param name="plugin-icon">/ru/andreymarkelov/atlas/plugins/buzzimport/images/pluginIcon.png</param>
         <param name="plugin-logo">/ru/andreymarkelov/atlas/plugins/buzzimport/images/pluginLogo.png</param>
-        <param name="configure.url">/secure/BuzzImportAdminAction.jspa</param>
+        <param name="configure.url">/secure/BuzzImportUploadAdminAction!default.jspa</param>
     </plugin-info>
 
     <!-- I18n -->
@@ -35,17 +35,15 @@
         <condition class="com.atlassian.jira.plugin.webfragment.conditions.JiraGlobalPermissionCondition">
             <param name="permission">admin</param>
         </condition>
-        <link linkId="buzzimport-admin-action">/secure/BuzzImportAdminAction.jspa</link>
+        <link linkId="buzzimport-admin-action">/secure/BuzzImportUploadAdminAction!default.jspa</link>
     </web-item>
 
     <!-- Web Actions -->
     <webwork1 key="buzzimport-actions" name="Buzz Import Web Actions" class="java.lang.Object">
         <actions>
-            <action name="ru.andreymarkelov.atlas.plugins.buzzimport.webwork.BuzzImportAdminAction" alias="BuzzImportAdminAction">
-                <view name="input">/ru/andreymarkelov/atlas/plugins/buzzimport/templates/actions/admin/input.vm</view>
-                <view name="permissionviolation">/secure/views/permissionviolation.jsp</view>
-            </action>
             <action name="ru.andreymarkelov.atlas.plugins.buzzimport.webwork.BuzzImportUploadAdminAction" alias="BuzzImportUploadAdminAction">
+                <view name="input">/ru/andreymarkelov/atlas/plugins/buzzimport/templates/actions/admin/input.vm</view>
+                <view name="error">/ru/andreymarkelov/atlas/plugins/buzzimport/templates/actions/admin/input.vm</view>
                 <view name="success">/ru/andreymarkelov/atlas/plugins/buzzimport/templates/actions/admin/success.vm</view>
                 <view name="permissionviolation">/secure/views/permissionviolation.jsp</view>
             </action>
