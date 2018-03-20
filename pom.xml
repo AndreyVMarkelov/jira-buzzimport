@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>ru.andreymarkelov.atlas.plugins</groupId>
     <artifactId>buzzimport</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <packaging>atlassian-plugin</packaging>
     <organization>
         <name>Andrey Markelov</name>
@@ -99,7 +99,7 @@
         </plugins>
     </build>
     <properties>
-        <jira.version>7.5.0</jira.version>
+        <jira.version>7.3.6</jira.version>
         <amps.version>6.3.15</amps.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <useFastdevCli>false</useFastdevCli>
