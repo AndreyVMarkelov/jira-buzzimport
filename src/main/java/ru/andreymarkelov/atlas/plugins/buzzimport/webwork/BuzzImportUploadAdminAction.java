@@ -14,6 +14,7 @@ import com.atlassian.jira.security.xsrf.RequiresXsrfCheck;
 import com.atlassian.jira.user.ApplicationUser;
 import com.atlassian.jira.web.action.JiraWebActionSupport;
 import com.google.common.collect.Sets;
+import org.apache.commons.csv.CSVParser;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -36,11 +37,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.atlassian.jira.permission.GlobalPermissionKey.ADMINISTER;
 import static com.atlassian.jira.web.action.setup.AbstractSetupAction.DEFAULT_GROUP_ADMINS;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Optional.ofNullable;
+import static org.apache.commons.csv.CSVFormat.DEFAULT;
+import static org.apache.commons.csv.CSVParser.parse;
+import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static webwork.action.ServletActionContext.getMultiPartRequest;
 
 public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
-    private static final Set<String> commonFields = Sets.newHashSet("key", "summary", "description");
+    private static final Set<String> commonFields = Sets.newHashSet("key", "summary", "description", "duedate");
 
     private final CustomFieldManager customFieldManager;
     private final IssueManager issueManager;
@@ -105,18 +110,19 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
         resultItems = new ArrayList<>();
         MultiPartRequestWrapper multiPartRequestWrapper = getMultiPartRequest();
         String mapping = multiPartRequestWrapper.getParameterValues("mapping")[0];
+        String fileName = multiPartRequestWrapper.getFilesystemName("uploadFile");
         File file = multiPartRequestWrapper.getFile("uploadFile");
         try {
             Properties properties = new Properties();
             properties.load(new StringReader(mapping));
-            List<Map<String, String>> rows = readXLSX(file);
-
+            List<Map<String, String>> rows = fileName.endsWith(".csv") ? readCsv(file) : readXLSX(file);
             if (!rows.isEmpty()) {
                 int rowNum = 0;
                 for (Map<String, String> row : rows) {
                     String keyMapping = row.get(properties.getProperty("key"));
                     String summaryMapping = row.get(properties.getProperty("summary"));
                     String descMapping = row.get(properties.getProperty("description"));
+                    String dueDateMapping = row.get(properties.get("duedate"));
 
                     if (StringUtils.isBlank(keyMapping)) {
                         resultItems.add(new ResultItem(rowNum, "No issue key in row"));
@@ -124,11 +130,14 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                         MutableIssue mutableIssue = issueManager.getIssueObject(keyMapping);
                         if (mutableIssue != null) {
                             IssueInputParameters issueInputParameters = issueService.newIssueInputParameters();
-                            if (StringUtils.isNotBlank(summaryMapping)) {
+                            if (isNotBlank(summaryMapping)) {
                                 issueInputParameters.setSummary(summaryMapping);
                             }
-                            if (StringUtils.isNotBlank(descMapping)) {
+                            if (isNotBlank(descMapping)) {
                                 issueInputParameters.setDescription(descMapping);
+                            }
+                            if (isNotBlank(dueDateMapping)) {
+                                issueInputParameters.setDueDate(dueDateMapping);
                             }
 
                             Enumeration enumeration = properties.propertyNames();
@@ -277,5 +286,24 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
         } else {
             throw new RuntimeException("Only string and numeric cells supported");
         }
+    }
+
+    private static List<Map<String, String>> readCsv(File csv) throws Exception {
+        CSVParser csvRecords = parse(csv, UTF_8, DEFAULT.withSkipHeaderRecord(false));
+        List<Map<String, String>> rows = new ArrayList<>();
+        List<String> headers = new ArrayList<>();
+        AtomicInteger rowNum = new AtomicInteger(0);
+        csvRecords.iterator().forEachRemaining(row -> {
+            if (rowNum.get() != 0) {
+                Map<String, String> rowMap = new LinkedHashMap<>();
+                AtomicInteger headersCounter = new AtomicInteger(0);
+                row.iterator().forEachRemaining(x -> rowMap.put(headers.get(headersCounter.getAndIncrement()), x));
+                rows.add(rowMap);
+            } else {
+                row.iterator().forEachRemaining(headers::add);
+            }
+            rowNum.incrementAndGet();
+        });
+        return rows;
     }
 }
