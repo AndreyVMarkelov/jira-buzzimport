@@ -5,10 +5,12 @@ import com.atlassian.jira.issue.CustomFieldManager;
 import com.atlassian.jira.issue.IssueInputParameters;
 import com.atlassian.jira.issue.IssueManager;
 import com.atlassian.jira.issue.MutableIssue;
+import com.atlassian.jira.issue.customfields.impl.CascadingSelectCFType;
 import com.atlassian.jira.issue.customfields.impl.SelectCFType;
 import com.atlassian.jira.issue.customfields.manager.OptionsManager;
 import com.atlassian.jira.issue.customfields.option.Option;
 import com.atlassian.jira.issue.fields.CustomField;
+import com.atlassian.jira.issue.label.LabelManager;
 import com.atlassian.jira.security.groups.GroupManager;
 import com.atlassian.jira.security.xsrf.RequiresXsrfCheck;
 import com.atlassian.jira.user.ApplicationUser;
@@ -29,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -38,20 +41,23 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.atlassian.jira.permission.GlobalPermissionKey.ADMINISTER;
 import static com.atlassian.jira.web.action.setup.AbstractSetupAction.DEFAULT_GROUP_ADMINS;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Arrays.asList;
 import static java.util.Optional.ofNullable;
 import static org.apache.commons.csv.CSVFormat.DEFAULT;
 import static org.apache.commons.csv.CSVParser.parse;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
+import static org.apache.commons.lang3.StringUtils.split;
 import static webwork.action.ServletActionContext.getMultiPartRequest;
 
 public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
-    private static final Set<String> commonFields = Sets.newHashSet("key", "summary", "description", "duedate");
+    private static final Set<String> commonFields = Sets.newHashSet("key", "summary", "description", "duedate", "assignee", "labels");
 
     private final CustomFieldManager customFieldManager;
     private final IssueManager issueManager;
     private final IssueService issueService;
     private final OptionsManager optionsManager;
     private final GroupManager groupManager;
+    private final LabelManager labelManager;
 
     private List<ResultItem> resultItems = Collections.emptyList();
     private String fatalError = "";
@@ -61,12 +67,14 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
             IssueManager issueManager,
             IssueService issueService,
             OptionsManager optionsManager,
-            GroupManager groupManager) {
+            GroupManager groupManager,
+            LabelManager labelManager) {
         this.customFieldManager = customFieldManager;
         this.issueManager = issueManager;
         this.issueService = issueService;
         this.optionsManager = optionsManager;
         this.groupManager = groupManager;
+        this.labelManager = labelManager;
     }
 
     @Override
@@ -123,6 +131,8 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                     String summaryMapping = row.get(properties.getProperty("summary"));
                     String descMapping = row.get(properties.getProperty("description"));
                     String dueDateMapping = row.get(properties.get("duedate"));
+                    String assigneeMapping = row.get(properties.get("assignee"));
+                    String labelsMapping = row.get(properties.get("labels"));
 
                     if (StringUtils.isBlank(keyMapping)) {
                         resultItems.add(new ResultItem(rowNum, "No issue key in row"));
@@ -138,6 +148,9 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                             }
                             if (isNotBlank(dueDateMapping)) {
                                 issueInputParameters.setDueDate(dueDateMapping);
+                            }
+                            if (isNotBlank(assigneeMapping)) {
+                                issueInputParameters.setAssigneeId(assigneeMapping);
                             }
 
                             Enumeration enumeration = properties.propertyNames();
@@ -156,6 +169,10 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                                     .map(x -> x.getOptionId().toString())
                                                     .findFirst()
                                                     .ifPresent(x -> issueInputParameters.addCustomFieldValue(fieldIdAsLong, x));
+                                        } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
+                                            String[] values = split(value, ",");
+                                            List<Option> options = optionsManager.findByOptionValue(values[0]);
+                                            options.toString();
                                         } else {
                                             issueInputParameters.addCustomFieldValue(fieldIdAsLong, value);
                                         }
@@ -171,6 +188,10 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                                         .map(x -> x.getOptionId().toString())
                                                         .findFirst()
                                                         .ifPresent(x -> issueInputParameters.addCustomFieldValue(fieldIdAsLong, x));
+                                            } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
+                                                String[] values = split(value, ",");
+                                                List<Option> options = optionsManager.findByOptionValue(values[0]);
+                                                options.toString();
                                             } else {
                                                 issueInputParameters.addCustomFieldValue(fieldIdAsLong, value);
                                             }
@@ -193,6 +214,13 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                     }
                                     resultItems.add(new ResultItem(rowNum + 1, sb.toString()));
                                 } else {
+                                    if (isNotBlank(labelsMapping)) {
+                                        try {
+                                            labelManager.setLabels(user, mutableIssue.getId(), new LinkedHashSet<>(asList(split(labelsMapping, " "))), false, false);
+                                        } catch (Exception ex) {
+                                            log.warn("Error setup labels", ex);
+                                        }
+                                    }
                                     resultItems.add(new ResultItem(rowNum + 1, "Issue " + keyMapping + " successfully updated."));
                                 }
                             } else {
