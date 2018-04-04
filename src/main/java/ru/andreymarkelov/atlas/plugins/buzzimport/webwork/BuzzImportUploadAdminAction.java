@@ -171,8 +171,19 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                                     .ifPresent(x -> issueInputParameters.addCustomFieldValue(fieldIdAsLong, x));
                                         } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
                                             String[] values = split(value, ",");
-                                            List<Option> options = optionsManager.findByOptionValue(values[0]);
-                                            options.toString();
+                                            CustomField customFieldCons = customField;
+                                            optionsManager.findByOptionValue(values[0]).stream()
+                                                    .filter(x -> x.getRelatedCustomField().getFieldId().equals(fieldId))
+                                                    .findFirst()
+                                                    .ifPresent(x -> {
+                                                        x.getChildOptions().stream()
+                                                                .filter(y -> y.getValue().equals(values[1]))
+                                                                .findFirst()
+                                                                .ifPresent(y -> {
+                                                                    issueInputParameters.addCustomFieldValue(customFieldCons.getId(), x.getOptionId().toString());
+                                                                    issueInputParameters.addCustomFieldValue(customFieldCons.getId() + ":1", y.getOptionId().toString());
+                                                                });
+                                                    });
                                         } else {
                                             issueInputParameters.addCustomFieldValue(fieldIdAsLong, value);
                                         }
@@ -190,8 +201,9 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                                         .ifPresent(x -> issueInputParameters.addCustomFieldValue(fieldIdAsLong, x));
                                             } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
                                                 String[] values = split(value, ",");
-                                                List<Option> options = optionsManager.findByOptionValue(values[0]);
-                                                options.toString();
+                                                List<Option> optionsParent = optionsManager.findByOptionValue(values[0]);
+                                                List<Option> optionsChild = optionsManager.findByOptionValue(values[1]);
+                                                issueInputParameters.addCustomFieldValue(fieldIdAsLong, optionsParent.get(0).getOptionId().toString(), optionsChild.get(0).getOptionId().toString());
                                             } else {
                                                 issueInputParameters.addCustomFieldValue(fieldIdAsLong, value);
                                             }
