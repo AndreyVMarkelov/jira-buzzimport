@@ -22,20 +22,14 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import ru.andreymarkelov.atlas.plugins.buzzimport.model.ResultItem;
 import webwork.multipart.MultiPartRequestWrapper;
 
 import java.io.File;
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.atlassian.jira.permission.GlobalPermissionKey.ADMINISTER;
@@ -50,6 +44,8 @@ import static org.apache.commons.lang3.StringUtils.split;
 import static webwork.action.ServletActionContext.getMultiPartRequest;
 
 public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
+    private static final Logger log = LoggerFactory.getLogger(BuzzImportUploadAdminAction.class);
+
     private static final Set<String> commonFields = Sets.newHashSet("key", "summary", "description", "duedate", "assignee", "labels");
 
     private final CustomFieldManager customFieldManager;
@@ -123,10 +119,17 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
         try {
             Properties properties = new Properties();
             properties.load(new StringReader(mapping));
+            if (log.isDebugEnabled()) {
+                log.debug("Parsed mappings: {}", properties);
+            }
             List<Map<String, String>> rows = fileName.endsWith(".csv") ? readCsv(file) : readXLSX(file);
             if (!rows.isEmpty()) {
                 int rowNum = 0;
                 for (Map<String, String> row : rows) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Processing row: {}", row);
+                    }
+
                     String keyMapping = row.get(properties.getProperty("key"));
                     String summaryMapping = row.get(properties.getProperty("summary"));
                     String descMapping = row.get(properties.getProperty("description"));
@@ -157,6 +160,9 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                             while (enumeration.hasMoreElements()) {
                                 String key = (String) enumeration.nextElement();
                                 String value = row.get(properties.getProperty(key));
+                                if (log.isDebugEnabled()) {
+                                    log.debug("Field mappings: {}, {}", key, value);
+                                }
                                 if (!commonFields.contains(key) && value != null) {
                                     CustomField customField = customFieldManager.getCustomFieldObject(key);
                                     if (customField != null) {

@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>ru.andreymarkelov.atlas.plugins</groupId>
     <artifactId>buzzimport</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
     <packaging>atlassian-plugin</packaging>
 
     <organization>
@@ -12,7 +12,7 @@
         <url>http://ru.linkedin.com/in/andreymarkelov/</url>
     </organization>
 
-    <name>buzzimport</name>
+    <name>Buzz Imports</name>
     <description>This is the ru.andreymarkelov.atlas.plugins:buzzimport plugin for Atlassian JIRA.</description>
 
     <dependencies>
