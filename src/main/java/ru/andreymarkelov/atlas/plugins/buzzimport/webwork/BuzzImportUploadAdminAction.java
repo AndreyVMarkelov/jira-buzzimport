@@ -166,6 +166,9 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                 if (!commonFields.contains(key) && value != null) {
                                     CustomField customField = customFieldManager.getCustomFieldObject(key);
                                     if (customField != null) {
+                                        if (log.isDebugEnabled()) {
+                                            log.debug("Found field: {}", customField.getFieldName());
+                                        }
                                         String fieldId = customField.getId();
                                         Long fieldIdAsLong = customField.getIdAsLong();
                                         if (customField.getCustomFieldType().getClass().isAssignableFrom(SelectCFType.class)) {
@@ -196,6 +199,9 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                     } else {
                                         customField = customFieldManager.getCustomFieldObjectByName(key);
                                         if (customField != null) {
+                                            if (log.isDebugEnabled()) {
+                                                log.debug("Found field: {}", customField.getFieldName());
+                                            }
                                             String fieldId = customField.getId();
                                             Long fieldIdAsLong = customField.getIdAsLong();
                                             if (customField.getCustomFieldType().getClass().isAssignableFrom(SelectCFType.class)) {
