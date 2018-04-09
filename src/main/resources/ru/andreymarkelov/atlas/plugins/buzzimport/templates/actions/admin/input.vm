@@ -24,7 +24,7 @@
             <fieldset>
                 <div class="field-group">
                     <label for="mapping">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.filemapping")</label>
-                    <textarea class="textarea" name="mapping" id="mapping"></textarea>
+                    <textarea class="textarea" name="mapping" id="mapping">$!lastMapping</textarea>
                     <div class="description">$action.getText("ru.andreymarkelov.atlas.plugins.buzzimport.upload.filemapping.desc")</div>
                 </div>
             </fieldset>

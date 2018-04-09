@@ -1,5 +1,18 @@
 package ru.andreymarkelov.atlas.plugins.buzzimport.webwork;
 
+import java.io.File;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.atlassian.jira.bc.issue.IssueService;
 import com.atlassian.jira.issue.CustomFieldManager;
 import com.atlassian.jira.issue.IssueInputParameters;
@@ -24,19 +37,16 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import ru.andreymarkelov.atlas.plugins.buzzimport.manager.StorageManager;
 import ru.andreymarkelov.atlas.plugins.buzzimport.model.ResultItem;
 import webwork.multipart.MultiPartRequestWrapper;
 
-import java.io.File;
-import java.io.StringReader;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static com.atlassian.jira.permission.GlobalPermissionKey.ADMINISTER;
-import static com.atlassian.jira.web.action.setup.AbstractSetupAction.DEFAULT_GROUP_ADMINS;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static java.util.Optional.ofNullable;
+
+import static com.atlassian.jira.permission.GlobalPermissionKey.ADMINISTER;
+import static com.atlassian.jira.web.action.setup.AbstractSetupAction.DEFAULT_GROUP_ADMINS;
 import static org.apache.commons.csv.CSVFormat.DEFAULT;
 import static org.apache.commons.csv.CSVParser.parse;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
@@ -54,9 +64,11 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
     private final OptionsManager optionsManager;
     private final GroupManager groupManager;
     private final LabelManager labelManager;
+    private final StorageManager storageManager;
 
     private List<ResultItem> resultItems = Collections.emptyList();
     private String fatalError = "";
+    private String lastMapping;
 
     public BuzzImportUploadAdminAction(
             CustomFieldManager customFieldManager,
@@ -64,13 +76,15 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
             IssueService issueService,
             OptionsManager optionsManager,
             GroupManager groupManager,
-            LabelManager labelManager) {
+            LabelManager labelManager,
+            StorageManager storageManager) {
         this.customFieldManager = customFieldManager;
         this.issueManager = issueManager;
         this.issueService = issueService;
         this.optionsManager = optionsManager;
         this.groupManager = groupManager;
         this.labelManager = labelManager;
+        this.storageManager = storageManager;
     }
 
     @Override
@@ -101,6 +115,7 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
         if (!hasAdminPermission()) {
             return PERMISSION_VIOLATION_RESULT;
         }
+        lastMapping = storageManager.getLastMapping();
         return INPUT;
     }
 
@@ -114,6 +129,7 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
         resultItems = new ArrayList<>();
         MultiPartRequestWrapper multiPartRequestWrapper = getMultiPartRequest();
         String mapping = multiPartRequestWrapper.getParameterValues("mapping")[0];
+        storageManager.setLastMapping(mapping);
         String fileName = multiPartRequestWrapper.getFilesystemName("uploadFile");
         File file = multiPartRequestWrapper.getFile("uploadFile");
         try {
@@ -185,10 +201,16 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                                     .filter(x -> x.getRelatedCustomField().getFieldId().equals(fieldId))
                                                     .findFirst()
                                                     .ifPresent(x -> {
+                                                        if (log.isDebugEnabled()) {
+                                                            log.debug("Found parrent option: {}:{}", x.getOptionId(), x.getValue());
+                                                        }
                                                         x.getChildOptions().stream()
                                                                 .filter(y -> y.getValue().equals(values[1]))
                                                                 .findFirst()
                                                                 .ifPresent(y -> {
+                                                                    if (log.isDebugEnabled()) {
+                                                                        log.debug("Found children option: {}:{}", y.getOptionId(), y.getValue());
+                                                                    }
                                                                     issueInputParameters.addCustomFieldValue(customFieldCons.getId(), x.getOptionId().toString());
                                                                     issueInputParameters.addCustomFieldValue(customFieldCons.getId() + ":1", y.getOptionId().toString());
                                                                 });
@@ -357,5 +379,9 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
             rowNum.incrementAndGet();
         });
         return rows;
+    }
+
+    public String getLastMapping() {
+        return lastMapping;
     }
 }
