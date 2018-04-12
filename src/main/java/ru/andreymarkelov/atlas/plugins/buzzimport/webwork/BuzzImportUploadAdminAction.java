@@ -201,22 +201,15 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                             if (log.isDebugEnabled()) {
                                                 log.debug("Trying to find parrent option: {}", values[0]);
                                             }
-                                            optionsManager.findByOptionValue(trimToEmpty(values[0])).stream()
-                                                    .filter(x -> {
-                                                        String optionFieldId = x.getRelatedCustomField().getFieldId();
-                                                        boolean result = optionFieldId.equals(fieldId);
-                                                        if (log.isDebugEnabled()) {
-                                                            log.debug("Check customFieldId:{}. The check is: {}", optionFieldId, result);
-                                                        }
-                                                        return result;
-                                                    })
+                                            optionsManager.getOptions(customField.getRelevantConfig(mutableIssue)).stream()
+                                                    .filter(x -> trimToEmpty(values[0]).equals(trimToEmpty(x.getValue())))
                                                     .findFirst()
                                                     .ifPresent(x -> {
                                                         if (log.isDebugEnabled()) {
                                                             log.debug("Found parent option: {}:{}", x.getOptionId(), x.getValue());
                                                         }
                                                         x.getChildOptions().stream()
-                                                                .filter(y -> y.getValue().equals(values[1]))
+                                                                .filter(y -> trimToEmpty(y.getValue()).equals(trimToEmpty(values[1])))
                                                                 .findFirst()
                                                                 .ifPresent(y -> {
                                                                     if (log.isDebugEnabled()) {
