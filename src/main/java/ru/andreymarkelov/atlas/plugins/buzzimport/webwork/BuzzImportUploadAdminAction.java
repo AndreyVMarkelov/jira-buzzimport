@@ -51,6 +51,7 @@ import static org.apache.commons.csv.CSVFormat.DEFAULT;
 import static org.apache.commons.csv.CSVParser.parse;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.apache.commons.lang3.StringUtils.split;
+import static org.apache.commons.lang3.StringUtils.trimToEmpty;
 import static webwork.action.ServletActionContext.getMultiPartRequest;
 
 public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
@@ -197,12 +198,22 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                         } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
                                             String[] values = split(value, ",");
                                             CustomField customFieldCons = customField;
-                                            optionsManager.findByOptionValue(values[0]).stream()
-                                                    .filter(x -> x.getRelatedCustomField().getFieldId().equals(fieldId))
+                                            if (log.isDebugEnabled()) {
+                                                log.debug("Trying to find parrent option: {}", values[0]);
+                                            }
+                                            optionsManager.findByOptionValue(trimToEmpty(values[0])).stream()
+                                                    .filter(x -> {
+                                                        String optionFieldId = x.getRelatedCustomField().getFieldId();
+                                                        boolean result = optionFieldId.equals(fieldId);
+                                                        if (log.isDebugEnabled()) {
+                                                            log.debug("Check customFieldId:{}. The check is: {}", optionFieldId, result);
+                                                        }
+                                                        return result;
+                                                    })
                                                     .findFirst()
                                                     .ifPresent(x -> {
                                                         if (log.isDebugEnabled()) {
-                                                            log.debug("Found parrent option: {}:{}", x.getOptionId(), x.getValue());
+                                                            log.debug("Found parent option: {}:{}", x.getOptionId(), x.getValue());
                                                         }
                                                         x.getChildOptions().stream()
                                                                 .filter(y -> y.getValue().equals(values[1]))
