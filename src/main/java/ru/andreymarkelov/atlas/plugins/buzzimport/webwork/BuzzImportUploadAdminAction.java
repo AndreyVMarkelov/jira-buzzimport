@@ -208,16 +208,18 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                                         if (log.isDebugEnabled()) {
                                                             log.debug("Found parent option: {}:{}", x.getOptionId(), x.getValue());
                                                         }
-                                                        x.getChildOptions().stream()
-                                                                .filter(y -> trimToEmpty(y.getValue()).equals(trimToEmpty(values[1])))
-                                                                .findFirst()
-                                                                .ifPresent(y -> {
-                                                                    if (log.isDebugEnabled()) {
-                                                                        log.debug("Found children option: {}:{}", y.getOptionId(), y.getValue());
-                                                                    }
-                                                                    issueInputParameters.addCustomFieldValue(customFieldCons.getId(), x.getOptionId().toString());
-                                                                    issueInputParameters.addCustomFieldValue(customFieldCons.getId() + ":1", y.getOptionId().toString());
-                                                                });
+                                                        issueInputParameters.addCustomFieldValue(customFieldCons.getId(), x.getOptionId().toString());
+                                                        if (values.length > 1) {
+                                                            x.getChildOptions().stream()
+                                                                    .filter(y -> trimToEmpty(y.getValue()).equals(trimToEmpty(values[1])))
+                                                                    .findFirst()
+                                                                    .ifPresent(y -> {
+                                                                        if (log.isDebugEnabled()) {
+                                                                            log.debug("Found children option: {}:{}", y.getOptionId(), y.getValue());
+                                                                        }
+                                                                        issueInputParameters.addCustomFieldValue(customFieldCons.getId() + ":1", y.getOptionId().toString());
+                                                                    });
+                                                        }
                                                     });
                                         } else {
                                             issueInputParameters.addCustomFieldValue(fieldIdAsLong, value);
@@ -239,9 +241,30 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                                         .ifPresent(x -> issueInputParameters.addCustomFieldValue(fieldIdAsLong, x));
                                             } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
                                                 String[] values = split(value, ",");
-                                                List<Option> optionsParent = optionsManager.findByOptionValue(values[0]);
-                                                List<Option> optionsChild = optionsManager.findByOptionValue(values[1]);
-                                                issueInputParameters.addCustomFieldValue(fieldIdAsLong, optionsParent.get(0).getOptionId().toString(), optionsChild.get(0).getOptionId().toString());
+                                                CustomField customFieldCons = customField;
+                                                if (log.isDebugEnabled()) {
+                                                    log.debug("Trying to find parrent option: {}", values[0]);
+                                                }
+                                                optionsManager.getOptions(customField.getRelevantConfig(mutableIssue)).stream()
+                                                        .filter(x -> trimToEmpty(values[0]).equals(trimToEmpty(x.getValue())))
+                                                        .findFirst()
+                                                        .ifPresent(x -> {
+                                                            if (log.isDebugEnabled()) {
+                                                                log.debug("Found parent option: {}:{}", x.getOptionId(), x.getValue());
+                                                            }
+                                                            issueInputParameters.addCustomFieldValue(customFieldCons.getId(), x.getOptionId().toString());
+                                                            if (values.length > 1) {
+                                                                x.getChildOptions().stream()
+                                                                        .filter(y -> trimToEmpty(y.getValue()).equals(trimToEmpty(values[1])))
+                                                                        .findFirst()
+                                                                        .ifPresent(y -> {
+                                                                            if (log.isDebugEnabled()) {
+                                                                                log.debug("Found children option: {}:{}", y.getOptionId(), y.getValue());
+                                                                            }
+                                                                            issueInputParameters.addCustomFieldValue(customFieldCons.getId() + ":1", y.getOptionId().toString());
+                                                                        });
+                                                            }
+                                                        });
                                             } else {
                                                 issueInputParameters.addCustomFieldValue(fieldIdAsLong, value);
                                             }
@@ -357,7 +380,7 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
     }
 
     private static String readCell(Cell cell) {
-        if (cell.getCellType() == Cell.CELL_TYPE_STRING) {
+        if (cell.getCellType() == Cell.CELL_TYPE_STRING || cell.getCellType() == Cell.CELL_TYPE_BLANK) {
             return cell.getStringCellValue();
         } else if (cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
             return String.valueOf(cell.getNumericCellValue());
