@@ -2,9 +2,13 @@ package ru.andreymarkelov.atlas.plugins.buzzimport.webwork;
 
 import java.io.File;
 import java.io.StringReader;
+import java.sql.Timestamp;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -13,24 +17,23 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.atlassian.jira.bc.issue.IssueService;
+import com.atlassian.jira.event.type.EventDispatchOption;
 import com.atlassian.jira.issue.CustomFieldManager;
-import com.atlassian.jira.issue.IssueInputParameters;
 import com.atlassian.jira.issue.IssueManager;
+import com.atlassian.jira.issue.ModifiedValue;
 import com.atlassian.jira.issue.MutableIssue;
 import com.atlassian.jira.issue.customfields.impl.CascadingSelectCFType;
 import com.atlassian.jira.issue.customfields.impl.SelectCFType;
 import com.atlassian.jira.issue.customfields.manager.OptionsManager;
-import com.atlassian.jira.issue.customfields.option.Option;
 import com.atlassian.jira.issue.fields.CustomField;
+import com.atlassian.jira.issue.index.IssueIndexManager;
 import com.atlassian.jira.issue.label.LabelManager;
+import com.atlassian.jira.issue.util.DefaultIssueChangeHolder;
 import com.atlassian.jira.security.groups.GroupManager;
 import com.atlassian.jira.security.xsrf.RequiresXsrfCheck;
 import com.atlassian.jira.user.ApplicationUser;
 import com.atlassian.jira.web.action.JiraWebActionSupport;
-import com.google.common.collect.Sets;
 import org.apache.commons.csv.CSVParser;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -47,8 +50,10 @@ import static java.util.Optional.ofNullable;
 
 import static com.atlassian.jira.permission.GlobalPermissionKey.ADMINISTER;
 import static com.atlassian.jira.web.action.setup.AbstractSetupAction.DEFAULT_GROUP_ADMINS;
+import static com.google.common.collect.Sets.newHashSet;
 import static org.apache.commons.csv.CSVFormat.DEFAULT;
 import static org.apache.commons.csv.CSVParser.parse;
+import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.apache.commons.lang3.StringUtils.split;
 import static org.apache.commons.lang3.StringUtils.trimToEmpty;
@@ -57,14 +62,16 @@ import static webwork.action.ServletActionContext.getMultiPartRequest;
 public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
     private static final Logger log = LoggerFactory.getLogger(BuzzImportUploadAdminAction.class);
 
-    private static final Set<String> commonFields = Sets.newHashSet("key", "summary", "description", "duedate", "assignee", "labels");
+    private static final Set<String> commonFields = newHashSet("key", "summary", "description", "duedate", "assignee", "labels");
+
+    private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     private final CustomFieldManager customFieldManager;
     private final IssueManager issueManager;
-    private final IssueService issueService;
     private final OptionsManager optionsManager;
     private final GroupManager groupManager;
     private final LabelManager labelManager;
+    private final IssueIndexManager issueIndexManager;
     private final StorageManager storageManager;
 
     private List<ResultItem> resultItems = Collections.emptyList();
@@ -74,17 +81,17 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
     public BuzzImportUploadAdminAction(
             CustomFieldManager customFieldManager,
             IssueManager issueManager,
-            IssueService issueService,
             OptionsManager optionsManager,
             GroupManager groupManager,
             LabelManager labelManager,
+            IssueIndexManager issueIndexManager,
             StorageManager storageManager) {
         this.customFieldManager = customFieldManager;
         this.issueManager = issueManager;
-        this.issueService = issueService;
         this.optionsManager = optionsManager;
         this.groupManager = groupManager;
         this.labelManager = labelManager;
+        this.issueIndexManager = issueIndexManager;
         this.storageManager = storageManager;
     }
 
@@ -154,23 +161,22 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                     String assigneeMapping = row.get(properties.get("assignee"));
                     String labelsMapping = row.get(properties.get("labels"));
 
-                    if (StringUtils.isBlank(keyMapping)) {
+                    if (isBlank(keyMapping)) {
                         resultItems.add(new ResultItem(rowNum, "No issue key in row"));
                     } else {
                         MutableIssue mutableIssue = issueManager.getIssueObject(keyMapping);
                         if (mutableIssue != null) {
-                            IssueInputParameters issueInputParameters = issueService.newIssueInputParameters();
                             if (isNotBlank(summaryMapping)) {
-                                issueInputParameters.setSummary(summaryMapping);
+                                mutableIssue.setSummary(summaryMapping);
                             }
                             if (isNotBlank(descMapping)) {
-                                issueInputParameters.setDescription(descMapping);
+                                mutableIssue.setDescription(descMapping);
                             }
                             if (isNotBlank(dueDateMapping)) {
-                                issueInputParameters.setDueDate(dueDateMapping);
+                                mutableIssue.setDueDate(new Timestamp(DATE_FORMAT.parse(dueDateMapping).getTime()));
                             }
                             if (isNotBlank(assigneeMapping)) {
-                                issueInputParameters.setAssigneeId(assigneeMapping);
+                                mutableIssue.setAssigneeId(assigneeMapping);
                             }
 
                             Enumeration enumeration = properties.propertyNames();
@@ -180,138 +186,32 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                 if (log.isDebugEnabled()) {
                                     log.debug("Field mappings: {}, {}", key, value);
                                 }
+
                                 if (!commonFields.contains(key) && value != null) {
                                     CustomField customField = customFieldManager.getCustomFieldObject(key);
                                     if (customField != null) {
-                                        if (log.isDebugEnabled()) {
-                                            log.debug("Found field: {}", customField.getFieldName());
-                                        }
-                                        String fieldId = customField.getId();
-                                        Long fieldIdAsLong = customField.getIdAsLong();
-                                        if (customField.getCustomFieldType().getClass().isAssignableFrom(SelectCFType.class)) {
-                                            List<Option> options = optionsManager.findByOptionValue(value);
-                                            options.stream()
-                                                    .filter(x -> x.getRelatedCustomField().getFieldId().equals(fieldId))
-                                                    .map(x -> x.getOptionId().toString())
-                                                    .findFirst()
-                                                    .ifPresent(x -> issueInputParameters.addCustomFieldValue(fieldIdAsLong, x));
-                                        } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
-                                            String[] values = split(value, ",");
-                                            CustomField customFieldCons = customField;
-                                            if (log.isDebugEnabled()) {
-                                                log.debug("Trying to find parrent option: {}", values[0]);
-                                            }
-                                            optionsManager.getOptions(customField.getRelevantConfig(mutableIssue)).stream()
-                                                    .filter(x -> trimToEmpty(values[0]).equals(trimToEmpty(x.getValue())))
-                                                    .findFirst()
-                                                    .ifPresent(x -> {
-                                                        if (log.isDebugEnabled()) {
-                                                            log.debug("Found parent option: {}:{}", x.getOptionId(), x.getValue());
-                                                        }
-                                                        issueInputParameters.addCustomFieldValue(customFieldCons.getId(), x.getOptionId().toString());
-                                                        if (values.length > 1) {
-                                                            x.getChildOptions().stream()
-                                                                    .filter(y -> trimToEmpty(y.getValue()).equals(trimToEmpty(values[1])))
-                                                                    .findFirst()
-                                                                    .ifPresent(y -> {
-                                                                        if (log.isDebugEnabled()) {
-                                                                            log.debug("Found children option: {}:{}", y.getOptionId(), y.getValue());
-                                                                        }
-                                                                        issueInputParameters.addCustomFieldValue(customFieldCons.getId() + ":1", y.getOptionId().toString());
-                                                                    });
-                                                        }
-                                                    });
-                                        } else {
-                                            issueInputParameters.addCustomFieldValue(fieldIdAsLong, value);
-                                        }
+                                        updateCustomField(mutableIssue, customField, value);
                                     } else {
                                         customField = customFieldManager.getCustomFieldObjectByName(key);
                                         if (customField != null) {
-                                            if (log.isDebugEnabled()) {
-                                                log.debug("Found field: {}", customField.getFieldName());
-                                            }
-                                            String fieldId = customField.getId();
-                                            Long fieldIdAsLong = customField.getIdAsLong();
-                                            if (customField.getCustomFieldType().getClass().isAssignableFrom(SelectCFType.class)) {
-                                                List<Option> options = optionsManager.findByOptionValue(value);
-                                                options.stream()
-                                                        .filter(x -> x.getRelatedCustomField().getFieldId().equals(fieldId))
-                                                        .map(x -> x.getOptionId().toString())
-                                                        .findFirst()
-                                                        .ifPresent(x -> issueInputParameters.addCustomFieldValue(fieldIdAsLong, x));
-                                            } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
-                                                String[] values = split(value, ",");
-                                                CustomField customFieldCons = customField;
-                                                if (log.isDebugEnabled()) {
-                                                    log.debug("Trying to find parrent option: {}", values[0]);
-                                                }
-                                                optionsManager.getOptions(customField.getRelevantConfig(mutableIssue)).stream()
-                                                        .filter(x -> trimToEmpty(values[0]).equals(trimToEmpty(x.getValue())))
-                                                        .findFirst()
-                                                        .ifPresent(x -> {
-                                                            if (log.isDebugEnabled()) {
-                                                                log.debug("Found parent option: {}:{}", x.getOptionId(), x.getValue());
-                                                            }
-                                                            issueInputParameters.addCustomFieldValue(customFieldCons.getId(), x.getOptionId().toString());
-                                                            if (values.length > 1) {
-                                                                x.getChildOptions().stream()
-                                                                        .filter(y -> trimToEmpty(y.getValue()).equals(trimToEmpty(values[1])))
-                                                                        .findFirst()
-                                                                        .ifPresent(y -> {
-                                                                            if (log.isDebugEnabled()) {
-                                                                                log.debug("Found children option: {}:{}", y.getOptionId(), y.getValue());
-                                                                            }
-                                                                            issueInputParameters.addCustomFieldValue(customFieldCons.getId() + ":1", y.getOptionId().toString());
-                                                                        });
-                                                            }
-                                                        });
-                                            } else {
-                                                issueInputParameters.addCustomFieldValue(fieldIdAsLong, value);
-                                            }
+                                            updateCustomField(mutableIssue, customField, value);
                                         }
                                     }
                                 }
                             }
 
                             ApplicationUser user = groupManager.getUsersInGroup(DEFAULT_GROUP_ADMINS).iterator().next();
-                            IssueService.UpdateValidationResult updateValidationResult = issueService.validateUpdate(user, mutableIssue.getId(), issueInputParameters);
-                            if (updateValidationResult.isValid()) {
-                                IssueService.IssueResult updateResult = issueService.update(user, updateValidationResult);
-                                if (!updateResult.isValid()) {
-                                    StringBuilder sb = new StringBuilder();
-                                    for (String error : updateValidationResult.getErrorCollection().getErrorMessages()) {
-                                        if (sb.length() > 0) {
-                                            sb.append("\n");
-                                        }
-                                        sb.append(error);
-                                    }
-                                    resultItems.add(new ResultItem(rowNum + 1, sb.toString()));
-                                } else {
-                                    if (isNotBlank(labelsMapping)) {
-                                        try {
-                                            labelManager.setLabels(user, mutableIssue.getId(), new LinkedHashSet<>(asList(split(labelsMapping, " "))), false, false);
-                                        } catch (Exception ex) {
-                                            log.warn("Error setup labels", ex);
-                                        }
-                                    }
-                                    resultItems.add(new ResultItem(rowNum + 1, "Issue " + keyMapping + " successfully updated."));
+                            issueManager.updateIssue(user, mutableIssue, EventDispatchOption.ISSUE_UPDATED, false);
+
+                            if (isNotBlank(labelsMapping)) {
+                                try {
+                                    labelManager.setLabels(user, mutableIssue.getId(), new LinkedHashSet<>(asList(split(labelsMapping, " "))), false, false);
+                                } catch (Exception ex) {
+                                    log.warn("Error setup labels", ex);
                                 }
-                            } else {
-                                StringBuilder sb = new StringBuilder();
-                                for (String error : updateValidationResult.getErrorCollection().getErrorMessages()) {
-                                    if (sb.length() > 0) {
-                                        sb.append("\n");
-                                    }
-                                    sb.append(error);
-                                }
-                                for (Map.Entry<String, String> errorEntry : updateValidationResult.getErrorCollection().getErrors().entrySet()) {
-                                    if (sb.length() > 0) {
-                                        sb.append("\n");
-                                    }
-                                    sb.append(errorEntry.getKey()).append(": ").append(errorEntry.getValue());
-                                }
-                                resultItems.add(new ResultItem(rowNum + 1, sb.toString()));
                             }
+                            resultItems.add(new ResultItem(rowNum + 1, "Issue " + keyMapping + " successfully updated."));
+                            issueIndexManager.reIndex(mutableIssue);
                         } else {
                             resultItems.add(new ResultItem(rowNum + 1, "Issue key " + keyMapping + " doesn't exist."));
                         }
@@ -323,6 +223,76 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
         }
 
         return SUCCESS;
+    }
+
+    private void updateCustomField(MutableIssue mutableIssue, CustomField customField, String value) {
+        if (log.isDebugEnabled()) {
+            log.debug("Found field: {}", customField.getFieldName());
+        }
+        if (customField.getCustomFieldType().getClass().isAssignableFrom(SelectCFType.class)) {
+            updateSelectField(mutableIssue, customField, value);
+        } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
+            updateCascadingField(mutableIssue, customField, value);
+        } else {
+            updateTextField(mutableIssue, customField, value);
+        }
+    }
+
+    /**
+     * Set value for text fields.
+     */
+    private void updateTextField(MutableIssue mutableIssue, CustomField customField, String value) {
+        mutableIssue.setCustomFieldValue(customField, value);
+    }
+
+    /**
+     * Set value for select fields.
+     */
+    private void updateSelectField(MutableIssue mutableIssue, CustomField customField, String value) {
+        optionsManager.findByOptionValue(value).stream()
+                .filter(x -> x.getRelatedCustomField().getFieldId().equals(customField.getId()))
+                .findFirst()
+                .ifPresent(x -> mutableIssue.setCustomFieldValue(customField, x));
+    }
+
+    /**
+     * Set value for cascading select fields.
+     */
+    private void updateCascadingField(MutableIssue mutableIssue, CustomField customField, String value) {
+        String[] values = split(value, ",");
+        if (log.isDebugEnabled()) {
+            log.debug("Trying to find parent option: {}", values[0]);
+        }
+        optionsManager.getOptions(customField.getRelevantConfig(mutableIssue)).stream()
+                .filter(x -> trimToEmpty(values[0]).equals(trimToEmpty(x.getValue())))
+                .findFirst()
+                .ifPresent(x -> {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Found parent option: {}:{}", x.getOptionId(), x.getValue());
+                    }
+
+                    if (values.length > 1) {
+                        x.getChildOptions().stream()
+                                .filter(y -> trimToEmpty(y.getValue()).equals(trimToEmpty(values[1])))
+                                .findFirst()
+                                .ifPresent(y -> {
+                                    if (log.isDebugEnabled()) {
+                                        log.debug("Found children option: {}:{}", y.getOptionId(), y.getValue());
+                                    }
+
+                                    DefaultIssueChangeHolder changeHolder = new DefaultIssueChangeHolder();
+                                    Map<String, Object> newValue = new HashMap<>();
+                                    newValue.put(null, x);
+                                    newValue.put("1", y);
+                                    customField.updateValue(null, mutableIssue, new ModifiedValue(mutableIssue.getCustomFieldValue(customField), newValue), changeHolder);
+                                });
+                    } else {
+                        DefaultIssueChangeHolder changeHolder = new DefaultIssueChangeHolder();
+                        Map<String, Object> newValue = new HashMap<>();
+                        newValue.put(null, x);
+                        customField.updateValue(null, mutableIssue, new ModifiedValue(mutableIssue.getCustomFieldValue(customField), newValue), changeHolder);
+                    }
+                });
     }
 
     private boolean hasAdminPermission() {
