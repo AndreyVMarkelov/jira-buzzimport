@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.atlassian.jira.event.type.EventDispatchOption;
 import com.atlassian.jira.issue.CustomFieldManager;
@@ -23,10 +25,16 @@ import com.atlassian.jira.issue.IssueManager;
 import com.atlassian.jira.issue.ModifiedValue;
 import com.atlassian.jira.issue.MutableIssue;
 import com.atlassian.jira.issue.customfields.impl.CascadingSelectCFType;
+import com.atlassian.jira.issue.customfields.impl.DateCFType;
+import com.atlassian.jira.issue.customfields.impl.DateTimeCFType;
+import com.atlassian.jira.issue.customfields.impl.LabelsCFType;
+import com.atlassian.jira.issue.customfields.impl.NumberCFType;
 import com.atlassian.jira.issue.customfields.impl.SelectCFType;
+import com.atlassian.jira.issue.customfields.impl.UserCFType;
 import com.atlassian.jira.issue.customfields.manager.OptionsManager;
 import com.atlassian.jira.issue.fields.CustomField;
 import com.atlassian.jira.issue.index.IssueIndexManager;
+import com.atlassian.jira.issue.label.Label;
 import com.atlassian.jira.issue.label.LabelManager;
 import com.atlassian.jira.issue.util.DefaultIssueChangeHolder;
 import com.atlassian.jira.security.groups.GroupManager;
@@ -34,6 +42,7 @@ import com.atlassian.jira.security.xsrf.RequiresXsrfCheck;
 import com.atlassian.jira.user.ApplicationUser;
 import com.atlassian.jira.web.action.JiraWebActionSupport;
 import org.apache.commons.csv.CSVParser;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -64,7 +73,8 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
 
     private static final Set<String> commonFields = newHashSet("key", "summary", "description", "duedate", "assignee", "labels");
 
-    private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static final DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd");
+    private static final DateFormat DATETIME_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     private final CustomFieldManager customFieldManager;
     private final IssueManager issueManager;
@@ -225,7 +235,12 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
         return SUCCESS;
     }
 
-    private void updateCustomField(MutableIssue mutableIssue, CustomField customField, String value) {
+    private void updateCustomField(MutableIssue mutableIssue, CustomField customField, String value) throws Exception {
+        if (StringUtils.isBlank(value)) {
+            customField.removeValueFromIssueObject(mutableIssue);
+            return;
+        }
+
         if (log.isDebugEnabled()) {
             log.debug("Found field: {}", customField.getFieldName());
         }
@@ -233,6 +248,16 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
             updateSelectField(mutableIssue, customField, value);
         } else if (customField.getCustomFieldType().getClass().isAssignableFrom(CascadingSelectCFType.class)) {
             updateCascadingField(mutableIssue, customField, value);
+        } else if (customField.getCustomFieldType().getClass().isAssignableFrom(NumberCFType.class)) {
+            updateNumberField(mutableIssue, customField, value);
+        } else if (customField.getCustomFieldType().getClass().isAssignableFrom(UserCFType.class)) {
+            updateUserField(mutableIssue, customField, value);
+        } else if (customField.getCustomFieldType().getClass().isAssignableFrom(DateCFType.class)) {
+            updateDateField(mutableIssue, customField, value);
+        } else if (customField.getCustomFieldType().getClass().isAssignableFrom(DateTimeCFType.class)) {
+            updateDateTimeField(mutableIssue, customField, value);
+        } else if (customField.getCustomFieldType().getClass().isAssignableFrom(LabelsCFType.class)) {
+            updateLabelsNumberField(mutableIssue, customField, value);
         } else {
             updateTextField(mutableIssue, customField, value);
         }
@@ -243,6 +268,48 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
      */
     private void updateTextField(MutableIssue mutableIssue, CustomField customField, String value) {
         mutableIssue.setCustomFieldValue(customField, value);
+    }
+
+    /**
+     * Set value for number fields.
+     */
+    private void updateNumberField(MutableIssue mutableIssue, CustomField customField, String value) {
+        mutableIssue.setCustomFieldValue(customField, Double.valueOf(value));
+    }
+
+    /**
+     * Set value for labels fields.
+     */
+    private void updateLabelsNumberField(MutableIssue mutableIssue, CustomField customField, String value) {
+        Set<Label> labels = Stream.of(split(value, " "))
+                .map(x -> new Label(null, mutableIssue.getId(), customField.getIdAsLong(), x))
+                .collect(Collectors.toSet());
+        mutableIssue.setCustomFieldValue(customField, labels);
+    }
+
+    /**
+     * Set value for date fields.
+     */
+    private void updateDateField(MutableIssue mutableIssue, CustomField customField, String value) throws Exception {
+        mutableIssue.setCustomFieldValue(customField, new Timestamp(DATE_FORMAT.parse(value).getTime()));
+    }
+
+    /**
+     * Set value for datetime fields.
+     */
+    private void updateDateTimeField(MutableIssue mutableIssue, CustomField customField, String value) throws Exception {
+        mutableIssue.setCustomFieldValue(customField, new Timestamp(DATETIME_FORMAT.parse(value).getTime()));
+    }
+
+    /**
+     * Set value for user fields.
+     */
+    private void updateUserField(MutableIssue mutableIssue, CustomField customField, String value) {
+        ApplicationUser applicationUser = getUserManager().getUserByName(value);
+        if (applicationUser == null) {
+            applicationUser = getUserManager().getUserByKey(value);
+        }
+        mutableIssue.setCustomFieldValue(customField, applicationUser);
     }
 
     /**
@@ -353,7 +420,8 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
         if (cell.getCellType() == Cell.CELL_TYPE_STRING || cell.getCellType() == Cell.CELL_TYPE_BLANK) {
             return cell.getStringCellValue();
         } else if (cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
-            return String.valueOf(cell.getNumericCellValue());
+            cell.setCellType(Cell.CELL_TYPE_STRING);
+            return cell.getStringCellValue();
         } else {
             throw new RuntimeException("Only string and numeric cells supported");
         }
