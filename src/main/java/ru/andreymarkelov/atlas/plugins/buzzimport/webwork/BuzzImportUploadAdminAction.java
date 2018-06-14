@@ -158,7 +158,7 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
             }
             List<Map<String, String>> rows = fileName.endsWith(".csv") ? readCsv(file) : readXLSX(file);
             if (!rows.isEmpty()) {
-                int rowNum = 0;
+                int rowNum = 1;
                 for (Map<String, String> row : rows) {
                     if (log.isDebugEnabled()) {
                         log.debug("Processing row: {}", row);
@@ -172,7 +172,7 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                     String labelsMapping = row.get(properties.get("labels"));
 
                     if (isBlank(keyMapping)) {
-                        resultItems.add(new ResultItem(rowNum, "No issue key in row"));
+                        resultItems.add(new ResultItem(rowNum++, "No issue key in row"));
                     } else {
                         MutableIssue mutableIssue = issueManager.getIssueObject(keyMapping);
                         if (mutableIssue != null) {
@@ -220,10 +220,10 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
                                     log.warn("Error setup labels", ex);
                                 }
                             }
-                            resultItems.add(new ResultItem(rowNum + 1, "Issue " + keyMapping + " successfully updated."));
+                            resultItems.add(new ResultItem(rowNum++, "Issue " + keyMapping + " successfully updated."));
                             issueIndexManager.reIndex(mutableIssue);
                         } else {
-                            resultItems.add(new ResultItem(rowNum + 1, "Issue key " + keyMapping + " doesn't exist."));
+                            resultItems.add(new ResultItem(rowNum++, "Issue key " + keyMapping + " doesn't exist."));
                         }
                     }
                 }
@@ -406,8 +406,9 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
             sheet.iterator().forEachRemaining(row -> {
                 if (rowNum.get() != 0) {
                     Map<String, String> rowMap = new LinkedHashMap<>();
-                    AtomicInteger headersCounter = new AtomicInteger(0);
-                    row.iterator().forEachRemaining(cell -> rowMap.put(headers.get(headersCounter.getAndIncrement()), readCell(cell)));
+                    for (int i = 0; i < headers.size(); i++) {
+                        rowMap.put(headers.get(i), readCell(row.getCell(i)));
+                    }
                     rows.add(rowMap);
                 }
                 rowNum.incrementAndGet();
@@ -417,6 +418,9 @@ public class BuzzImportUploadAdminAction extends JiraWebActionSupport {
     }
 
     private static String readCell(Cell cell) {
+        if (cell == null) {
+            return "";
+        }
         if (cell.getCellType() == Cell.CELL_TYPE_STRING || cell.getCellType() == Cell.CELL_TYPE_BLANK) {
             return cell.getStringCellValue();
         } else if (cell.getCellType() == Cell.CELL_TYPE_NUMERIC) {
